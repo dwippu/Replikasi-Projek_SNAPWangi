@@ -189,7 +189,6 @@ def save_image_with_boxes(image_path, boxes, save_to:str):
     plt.savefig(save_to)
 
 def cleaning_text(df_text):
-    
     exclude_list = ["disimpan", "disimpar", "i", "google", "atm", "museum", "an atm", "hotel", "googl", "rekomendasi aktivitas", "transportasi umum", "itn atm", "area ini", "terbaru", "login", "+", "y1 restoran", "restoran", "apotek", "telusuri google maps", "tidak ada info lalu lintas", "lapisan", "lapisar", "lapisa", "+|", "gogle"]
     exclude_specified_position = [Point(1799, 30), Point(35,37), Point(35,112.5), Point(33,184), Point(1885,809), Point(1858,31), Point(549,36), Point(644,36)]
     df_text["text"] = df_text["text"].str.lower()
@@ -240,7 +239,7 @@ def get_point_coor(link):
         return "Galat", "Galat"
     
 def add_column(df):
-    col = ["latitude", "longitude", "nama", "kategori", "telp", "alamat", "website", "last_review", "date_last_review", "last_review_rating", "link"]
+    col = ["latitude", "longitude", "nama", "kategori", "telp", "alamat", "website", "last_review", "date_last_review", "last_review_rating", "link", "keterangan"]
     for i in col:
         if i not in df.columns:
             df[f"{i}"] = None
@@ -305,6 +304,11 @@ def get_places_detail(driver, df_result):
             elif identity.startswith("Situs Web"):
                 df_result["website"][i] = identity
 
+        try:
+            df_result["keterangan"][i] = driver.find_element(By.CLASS_NAME, "aSftqf").text
+        except:
+            pass
+
         # Ambil Last Review
         try:
             driver.find_element(By.XPATH, f'//*[@aria-label="Ulasan untuk {name_element.text}"]').click()
@@ -366,23 +370,21 @@ def filter_place(df, polygon, drop = True):
     if drop:
         df = df[df["intersect"]==True]
         df.reset_index(drop=True, inplace=True)
+        df.drop("intersect", axis = 1)
     
     df = df.drop(['text', 'scores', 'boxes', 'centroid', 'source'], axis = 1)
 
     return df
 
 # EXECUT
-import os
-
 # Nama folder yang ingin diperiksa atau dibuat
-folder_name = ["screenshoot", "ocr_result"]
+folder_name = ["screenshoot", "ocr_result", f"[SHPFile] Unit usaha kelurahan {kelurahan} dan sekitarnya", f"[SHPFile] Unit usaha kelurahan {kelurahan}"]
 
 # Memeriksa apakah folder ada
 for i in folder_name:
-    if not os.path.exists("coba/"+i):
+    if not os.path.exists(path_output+i):
         # Membuat folder jika belum ada
-        os.makedirs("coba/"+i)
-
+        os.makedirs(path_output+i)
 sys.stdout = open(f'{path_output}log.txt', 'w')
 
 # Hitung Waktu
@@ -462,19 +464,20 @@ driver.quit()
 end_time = time.time()
 elapsed_time = end_time - start_time
 print(f'{current_time()} INFO: Waktu eksekusi sampai looping 2: {elapsed_time // 3600} jam {(elapsed_time % 3600) // 60} menit {elapsed_time % 60} detik')
-
-sys.stdout.close()
+sys.stdout.flush()
 
 df_result_final = cleaning_data(df_result)
 df_result_final_kelurahan = filter_place(df_result_final, geo_kelurahan, drop=False)
 df_result_final_kelurahan_filtered = filter_place(df_result_final, geo_kelurahan, drop=True)
 
-df_result_final.to_csv(f"{path_output}hasil scrapping final.csv")
-df_result_final_kelurahan.to_csv(f"{path_output}hasil filter kelurahan (label).csv")
-df_result_final_kelurahan_filtered.to_csv(f"{path_output}hasil filter kelurahan (drop).csv")
+df_result_final = cleaning_data(df_result)
+df_result_final_kelurahan = filter_place(df_result_final, geo_kelurahan, drop=False)
+df_result_final_kelurahan_filtered = filter_place(df_result_final, geo_kelurahan, drop=True)
 
 df_result_final_kelurahan['geometry'] = df_result_final_kelurahan.apply(lambda row: Point(row['longitude'], row['latitude']), axis=1)
-gpd.GeoDataFrame(df_result_final_kelurahan, geometry="geometry").set_crs("EPSG:4326", allow_override=True, inplace=True).to_file(f'{path_output}Unit usaha kelurahan cikole dan sekitarnya.shp')
+gpd.GeoDataFrame(df_result_final_kelurahan, geometry="geometry").set_crs("EPSG:4326", allow_override=True, inplace=True).to_file(f'{path_output}[SHPFile] Unit usaha kelurahan {kelurahan} dan sekitarnya/Unit usaha kelurahan {kelurahan} dan sekitarnya.shp')
 
 df_result_final_kelurahan_filtered['geometry'] = df_result_final_kelurahan_filtered.apply(lambda row: Point(row['longitude'], row['latitude']), axis=1)
-gpd.GeoDataFrame(df_result_final_kelurahan_filtered, geometry="geometry").set_crs("EPSG:4326", allow_override=True, inplace=True).to_file(f'{path_output}Unit usaha kelurahan cikole.shp')
+gpd.GeoDataFrame(df_result_final_kelurahan_filtered, geometry="geometry").set_crs("EPSG:4326", allow_override=True, inplace=True).to_file(f'{path_output}[SHPFile] Unit usaha kelurahan {kelurahan}/Unit usaha kelurahan {kelurahan}.shp')
+
+sys.stdout.close()
